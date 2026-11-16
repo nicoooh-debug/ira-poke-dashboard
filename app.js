@@ -17,8 +17,9 @@
     { id: "locale",   nome: "Locale · vendite dirette" },
     { id: "delivery", nome: "Delivery" },
   ];
-  // I dati salvati prima dell'aggiornamento come "locale" vengono letti come contanti
-  const normCanale = c => (c === "locale" ? "contanti" : c);
+  const CANALI_ID = new Set(CANALI.map(c => c.id));
+  // Il vecchio canale "locale" non esiste più: le sue righe vengono ignorate
+  const normCanale = c => (CANALI_ID.has(c) ? c : null);
   const NOME = Object.fromEntries(CANALI.map(c => [c.id, c.nome]));
   const CATEGORIE = { fornitori: "Fornitori", personale: "Personale", affitto: "Affitto", utenze: "Utenze", packaging: "Packaging", commissioni: "Commissioni", altro: "Altro" };
   const SAVE_DELAY = 600;
@@ -167,7 +168,9 @@
   }
 
   // ---------- Coda di salvataggio (resiste a offline e chiusura pagina) ----------
-  const pending = (() => { try { return JSON.parse(localStorage.getItem(PENDING_KEY)) || {}; } catch { return {}; } })();
+  let pending = (() => { try { return JSON.parse(localStorage.getItem(PENDING_KEY)) || {}; } catch { return {}; } })();
+  // Scarta salvataggi in attesa della versione vecchia (canale "locale")
+  for (const k of Object.keys(pending)) if (!CANALI_ID.has(k.split("|")[2])) delete pending[k];
   const savePending = () => { try { localStorage.setItem(PENDING_KEY, JSON.stringify(pending)); } catch {} };
   const pkey = (g, s, c) => `${g}|${s}|${c}`;
   const timers = {};
@@ -372,7 +375,8 @@
     const perCanale = Object.fromEntries(CANALI.map(c => [c.id, 0]));
     for (const r of entrate) {
       const c = normCanale(r.canale), v = Number(r.importo) || 0;
-      if (c in perCanale) perCanale[c] += v;
+      if (!c) continue;
+      perCanale[c] += v;
       day(r.giorno).entrate += v;
     }
     for (const u of uscite) day(u.giorno).uscite += Number(u.importo) || 0;
@@ -422,7 +426,7 @@
       const e = emptyEntrate();
       for (const r of day.entrate) {
         const c = normCanale(r.canale);
-        if (e[r.servizio] && c in e[r.servizio]) e[r.servizio][c] += Number(r.importo);
+        if (c && e[r.servizio]) e[r.servizio][c] = Number(r.importo);
       }
       state.entrate = e;
       applyPendingToState();

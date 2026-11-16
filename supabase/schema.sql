@@ -10,7 +10,7 @@
 create table if not exists public.entrate (
   giorno      date          not null,
   servizio    text          not null check (servizio in ('pranzo','cena')),
-  canale      text          not null constraint entrate_canale_check check (canale in ('contanti','pos','glovo','alfonsino','avvoolo','locale')),
+  canale      text          not null constraint entrate_canale_check check (canale in ('contanti','pos','glovo','alfonsino','avvoolo')),
   importo     numeric(10,2) not null default 0 check (importo >= 0),
   updated_at  timestamptz   not null default now(),
   updated_by  uuid          default auth.uid(),
