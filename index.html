@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#123A36" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="IRA POKÈ" />
+  <title>IRA POKÈ — Cassa giornaliera</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23123A36'/%3E%3Ccircle cx='22' cy='28' r='7' fill='%23FF7A59'/%3E%3Ccircle cx='40' cy='24' r='6' fill='%237BAE5C'/%3E%3Ccircle cx='38' cy='40' r='7' fill='%23F6F1E7'/%3E%3C/svg%3E" />
+</head>
+<body>
+
+  <!-- ============ LOGIN ============ -->
+  <section id="login" class="login" hidden>
+    <form id="login-form" class="login-card" autocomplete="on">
+      <div class="brand brand--big"><span class="brand-dot"></span>IRA POKÈ</div>
+      <p class="muted">Accedi per gestire gli incassi</p>
+      <label class="field">
+        <span>Email</span>
+        <input type="email" id="login-email" required autocomplete="username" />
+      </label>
+      <label class="field">
+        <span>Password</span>
+        <input type="password" id="login-password" required autocomplete="current-password" />
+      </label>
+      <button class="btn btn--primary btn--block" type="submit">Entra</button>
+      <p id="login-error" class="error" role="alert"></p>
+    </form>
+  </section>
+
+  <!-- ============ APP ============ -->
+  <div id="app" hidden>
+    <header class="topbar">
+      <div class="brand"><span class="brand-dot"></span>IRA POKÈ</div>
+      <div class="topbar-right">
+        <span id="sync" class="sync" data-state="ok" title="Stato salvataggio">Salvato</span>
+        <button id="logout" class="icon-btn" title="Esci" aria-label="Esci">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="demo-banner" class="demo-banner" hidden>
+      Modalità demo: i dati restano solo in questo browser. Collega Supabase in <code>config.js</code>.
+    </div>
+
+    <!-- Selettore giorno -->
+    <nav class="daybar" aria-label="Giorno">
+      <button class="icon-btn" id="day-prev" aria-label="Giorno precedente">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <label class="day-label">
+        <span id="day-weekday" class="day-weekday"></span>
+        <span id="day-date" class="day-date"></span>
+        <input type="date" id="day-input" aria-label="Scegli giorno" />
+      </label>
+      <button class="icon-btn" id="day-next" aria-label="Giorno successivo">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+      <button class="chip" id="day-today">Oggi</button>
+    </nav>
+
+    <main class="layout">
+
+      <!-- Riepilogo -->
+      <section class="summary" aria-label="Riepilogo del giorno">
+        <div class="summary-main">
+          <span class="summary-label">Entrate giornaliere</span>
+          <strong id="tot-giorno" class="summary-value">0,00 €</strong>
+          <span class="summary-split">
+            Pranzo <b id="sum-pranzo">0,00 €</b> · Cena <b id="sum-cena">0,00 €</b>
+          </span>
+        </div>
+        <div class="summary-side">
+          <div class="kpi">
+            <span>Uscite</span>
+            <strong id="tot-uscite">0,00 €</strong>
+          </div>
+          <div class="kpi kpi--result" id="kpi-result">
+            <span>Risultato</span>
+            <strong id="tot-risultato">0,00 €</strong>
+          </div>
+        </div>
+      </section>
+
+      <!-- Servizi -->
+      <section class="services">
+        <article class="card service" data-servizio="pranzo">
+          <header class="card-head">
+            <h2><span class="svc-icon">☀</span> Pranzo</h2>
+            <span class="card-total" data-total="pranzo">0,00 €</span>
+          </header>
+          <div class="channels" data-channels="pranzo"></div>
+        </article>
+
+        <article class="card service" data-servizio="cena">
+          <header class="card-head">
+            <h2><span class="svc-icon">☾</span> Cena</h2>
+            <span class="card-total" data-total="cena">0,00 €</span>
+          </header>
+          <div class="channels" data-channels="cena"></div>
+        </article>
+      </section>
+
+      <!-- Per piattaforma -->
+      <section class="card">
+        <header class="card-head">
+          <h2>Totale per canale</h2>
+          <span class="muted small">pranzo + cena</span>
+        </header>
+        <div id="platforms" class="platforms"></div>
+      </section>
+
+      <!-- Uscite -->
+      <section class="card">
+        <header class="card-head">
+          <h2>Uscite del giorno</h2>
+          <span class="card-total" id="uscite-total">0,00 €</span>
+        </header>
+        <form id="uscita-form" class="uscita-form">
+          <input id="u-desc" type="text" placeholder="Descrizione (es. pesce fornitore)" required maxlength="120" />
+          <div class="uscita-row">
+            <div class="money">
+              <input id="u-importo" type="text" inputmode="decimal" placeholder="0,00" required aria-label="Importo uscita" />
+              <span>€</span>
+            </div>
+            <select id="u-cat" aria-label="Categoria">
+              <option value="fornitori">Fornitori</option>
+              <option value="personale">Personale</option>
+              <option value="affitto">Affitto</option>
+              <option value="utenze">Utenze</option>
+              <option value="packaging">Packaging</option>
+              <option value="commissioni">Commissioni</option>
+              <option value="altro">Altro</option>
+            </select>
+            <select id="u-metodo" aria-label="Pagata con">
+              <option value="cassa">Cassa</option>
+              <option value="banca">Banca</option>
+            </select>
+          </div>
+          <button class="btn btn--primary" type="submit">Aggiungi uscita</button>
+        </form>
+        <ul id="uscite-list" class="list"></ul>
+      </section>
+
+      <!-- Delivery: registrato vs ricevuto -->
+      <section class="card card--note">
+        <header class="card-head">
+          <h2>Delivery: soldi da ricevere</h2>
+        </header>
+        <p class="muted small">
+          Le vendite delivery sono <b>registrate</b>, non sono soldi in banca o in cassaforte.
+          Diventano denaro disponibile solo quando registri l'accredito della piattaforma.
+        </p>
+        <div id="delivery" class="delivery"></div>
+        <details class="accredito-box">
+          <summary class="btn btn--ghost">+ Registra accredito ricevuto</summary>
+          <form id="accredito-form" class="uscita-form">
+            <div class="uscita-row">
+              <select id="a-piatt" aria-label="Piattaforma">
+                <option value="glovo">Glovo</option>
+                <option value="alfonsino">Alfonsino</option>
+                <option value="avvoolo">Avvoolo</option>
+              </select>
+              <div class="money">
+                <input id="a-importo" type="text" inputmode="decimal" placeholder="0,00" required aria-label="Importo accredito" />
+                <span>€</span>
+              </div>
+            </div>
+            <div class="uscita-row">
+              <input id="a-data" type="date" required aria-label="Data accredito" />
+              <select id="a-dest" aria-label="Destinazione">
+                <option value="banca">In banca</option>
+                <option value="cassaforte">In cassaforte</option>
+              </select>
+            </div>
+            <input id="a-note" type="text" placeholder="Nota (es. bonifico settimana 45)" maxlength="120" />
+            <button class="btn btn--primary" type="submit">Salva accredito</button>
+          </form>
+          <ul id="accrediti-list" class="list list--compact"></ul>
+        </details>
+      </section>
+
+      <!-- Storico -->
+      <section class="card">
+        <details>
+          <summary class="card-head card-head--summary">
+            <h2>Storico modifiche del giorno</h2>
+            <span class="muted small" id="storico-count"></span>
+          </summary>
+          <ul id="storico-list" class="list list--compact"></ul>
+        </details>
+      </section>
+
+      <footer class="foot muted small">Ultima modifica: <span id="last-update">—</span></footer>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
