@@ -1,11 +1,11 @@
 # IRA POKÈ — Dashboard cassa giornaliera
 
-Dashboard web (funziona bene anche da smartphone) per registrare gli incassi di **pranzo** e **cena** su ogni canale (Locale, Glovo, Alfonsino, Avvoolo), le uscite del giorno e il risultato economico.
+Dashboard web (funziona bene anche da smartphone) per registrare gli incassi di **pranzo** e **cena** su ogni canale (Locale in Contanti e POS, Glovo, Alfonsino, Avvoolo), le uscite del giorno e il risultato economico.
 
 - Calcola in automatico: totale pranzo, totale cena, totale giornaliero, totale per canale, totale uscite, risultato del giorno.
 - Ogni importo si può cambiare quante volte vuoi: viene **salvato da solo** dopo mezzo secondo e ogni modifica finisce nello **storico** (non si perde niente).
 - Se manca internet, le modifiche restano in attesa sul telefono e vengono salvate appena torna la connessione.
-- Le vendite delivery restano **vendite registrate**: diventano soldi in banca o in cassaforte solo quando registri l'accredito della piattaforma.
+- **Riepilogo mensile**: entrate, uscite e risultato del mese (in positivo o in negativo), con il dettaglio giorno per giorno.
 
 Senza configurazione la dashboard parte in **modalità demo** (dati salvati solo nel browser): utile per provarla subito.
 
@@ -74,5 +74,6 @@ Apri il link del sito → **iPhone (Safari)**: Condividi → *Aggiungi alla sche
 - `entrate` — valore attuale per giorno + servizio + canale
 - `entrate_storico` — ogni modifica (valore precedente → nuovo, ora, utente); compilata in automatico dal database
 - `uscite` — spese del giorno (le eliminazioni sono "morbide": la riga resta con `deleted_at`)
-- `accrediti` — soldi effettivamente ricevuti da Glovo / Alfonsino / Avvoolo
-- `delivery_saldo` (vista) — vendite registrate vs ricevute vs da ricevere, per piattaforma
+
+## Aggiornamento v2
+Se avevi già installato la prima versione, esegui una volta `supabase/aggiornamento-v2.sql` nel SQL Editor di Supabase.

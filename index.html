@@ -75,6 +75,9 @@
           <span class="summary-split">
             Pranzo <b id="sum-pranzo">0,00 €</b> · Cena <b id="sum-cena">0,00 €</b>
           </span>
+          <span class="summary-split">
+            Contanti <b id="sum-contanti">0,00 €</b> · POS <b id="sum-pos">0,00 €</b>
+          </span>
         </div>
         <div class="summary-side">
           <div class="kpi">
@@ -148,41 +151,24 @@
         <ul id="uscite-list" class="list"></ul>
       </section>
 
-      <!-- Delivery: registrato vs ricevuto -->
-      <section class="card card--note">
+      <!-- Riepilogo mensile -->
+      <section class="card month">
         <header class="card-head">
-          <h2>Delivery: soldi da ricevere</h2>
+          <h2><span class="svc-icon">▦</span><span id="mese-titolo" class="month-name"></span></h2>
+          <span id="mese-badge" class="badge">—</span>
         </header>
-        <p class="muted small">
-          Le vendite delivery sono <b>registrate</b>, non sono soldi in banca o in cassaforte.
-          Diventano denaro disponibile solo quando registri l'accredito della piattaforma.
-        </p>
-        <div id="delivery" class="delivery"></div>
-        <details class="accredito-box">
-          <summary class="btn btn--ghost">+ Registra accredito ricevuto</summary>
-          <form id="accredito-form" class="uscita-form">
-            <div class="uscita-row">
-              <select id="a-piatt" aria-label="Piattaforma">
-                <option value="glovo">Glovo</option>
-                <option value="alfonsino">Alfonsino</option>
-                <option value="avvoolo">Avvoolo</option>
-              </select>
-              <div class="money">
-                <input id="a-importo" type="text" inputmode="decimal" placeholder="0,00" required aria-label="Importo accredito" />
-                <span>€</span>
-              </div>
-            </div>
-            <div class="uscita-row">
-              <input id="a-data" type="date" required aria-label="Data accredito" />
-              <select id="a-dest" aria-label="Destinazione">
-                <option value="banca">In banca</option>
-                <option value="cassaforte">In cassaforte</option>
-              </select>
-            </div>
-            <input id="a-note" type="text" placeholder="Nota (es. bonifico settimana 45)" maxlength="120" />
-            <button class="btn btn--primary" type="submit">Salva accredito</button>
-          </form>
-          <ul id="accrediti-list" class="list list--compact"></ul>
+        <div class="month-kpis">
+          <div class="mk"><span>Entrate</span><strong id="mese-entrate">0,00 €</strong></div>
+          <div class="mk"><span>Uscite</span><strong id="mese-uscite">0,00 €</strong></div>
+          <div class="mk mk--result"><span>Risultato</span><strong id="mese-risultato">0,00 €</strong></div>
+        </div>
+        <div id="mese-canali" class="month-channels"></div>
+        <details>
+          <summary class="card-head card-head--summary month-days-toggle">
+            <span>Giorno per giorno</span>
+            <span class="muted small" id="mese-count"></span>
+          </summary>
+          <ul id="mese-giorni" class="list list--days"></ul>
         </details>
       </section>
 

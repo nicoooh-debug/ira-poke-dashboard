@@ -7,12 +7,18 @@
   // ---------- Costanti ----------
   const SERVIZI = ["pranzo", "cena"];
   const CANALI = [
-    { id: "locale",    nome: "Locale",    sub: "vendite dirette", color: "var(--c-locale)" },
-    { id: "glovo",     nome: "Glovo",     sub: "delivery",        color: "var(--c-glovo)" },
-    { id: "alfonsino", nome: "Alfonsino", sub: "delivery",        color: "var(--c-alfonsino)" },
-    { id: "avvoolo",   nome: "Avvoolo",   sub: "delivery",        color: "var(--c-avvoolo)" },
+    { id: "contanti",  nome: "Contanti",  gruppo: "locale",   color: "var(--c-contanti)" },
+    { id: "pos",       nome: "POS",       gruppo: "locale",   color: "var(--c-pos)" },
+    { id: "glovo",     nome: "Glovo",     gruppo: "delivery", color: "var(--c-glovo)" },
+    { id: "alfonsino", nome: "Alfonsino", gruppo: "delivery", color: "var(--c-alfonsino)" },
+    { id: "avvoolo",   nome: "Avvoolo",   gruppo: "delivery", color: "var(--c-avvoolo)" },
   ];
-  const DELIVERY = CANALI.filter(c => c.id !== "locale");
+  const GRUPPI = [
+    { id: "locale",   nome: "Locale · vendite dirette" },
+    { id: "delivery", nome: "Delivery" },
+  ];
+  // I dati salvati prima dell'aggiornamento come "locale" vengono letti come contanti
+  const normCanale = c => (c === "locale" ? "contanti" : c);
   const NOME = Object.fromEntries(CANALI.map(c => [c.id, c.nome]));
   const CATEGORIE = { fornitori: "Fornitori", personale: "Personale", affitto: "Affitto", utenze: "Utenze", packaging: "Packaging", commissioni: "Commissioni", altro: "Altro" };
   const SAVE_DELAY = 600;
@@ -37,6 +43,11 @@
     return Number.isFinite(n) && n >= 0 ? round2(n) : NaN;
   }
 
+  const monthRange = iso => {
+    const d = fromISO(iso);
+    return [toISO(new Date(d.getFullYear(), d.getMonth(), 1)), toISO(new Date(d.getFullYear(), d.getMonth() + 1, 0))];
+  };
+  const monthName = iso => fromISO(iso).toLocaleDateString("it-IT", { month: "long", year: "numeric" });
   const toISO = d => {
     const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
     return z.toISOString().slice(0, 10);
@@ -89,22 +100,20 @@
       },
       async addUscita(u) { ok(await sb.from("uscite").insert(u)); },
       async deleteUscita(id) { ok(await sb.from("uscite").update({ deleted_at: new Date().toISOString() }).eq("id", id)); },
-      async loadDelivery() {
-        const [saldo, accrediti] = await Promise.all([
-          sb.from("delivery_saldo").select("*").then(ok),
-          sb.from("accrediti").select("*").is("deleted_at", null).order("data", { ascending: false }).order("created_at", { ascending: false }).limit(20).then(ok),
+      async loadMonth(da, a) {
+        const [entrate, uscite] = await Promise.all([
+          sb.from("entrate").select("giorno,canale,importo").gte("giorno", da).lte("giorno", a).limit(5000).then(ok),
+          sb.from("uscite").select("giorno,importo").gte("giorno", da).lte("giorno", a).is("deleted_at", null).limit(5000).then(ok),
         ]);
-        return { saldo, accrediti };
+        return { entrate, uscite };
       },
-      async addAccredito(a) { ok(await sb.from("accrediti").insert(a)); },
-      async deleteAccredito(id) { ok(await sb.from("accrediti").update({ deleted_at: new Date().toISOString() }).eq("id", id)); },
     };
   }
 
   function createLocalStore() {
     const KEY = "irapoke_demo_db_v1";
     const read = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
-    const db = Object.assign({ entrate: {}, storico: [], uscite: [], accrediti: [] }, read());
+    const db = Object.assign({ entrate: {}, storico: [], uscite: [] }, read());
     const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch {} };
     const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
     const wait = v => new Promise(r => setTimeout(() => r(v), 80));
@@ -130,18 +139,13 @@
       },
       async addUscita(u) { db.uscite.push({ ...u, id: uid(), created_at: new Date().toISOString() }); persist(); return wait(); },
       async deleteUscita(id) { const u = db.uscite.find(x => x.id === id); if (u) u.deleted_at = new Date().toISOString(); persist(); return wait(); },
-      async loadDelivery() {
-        const acc = db.accrediti.filter(a => !a.deleted_at);
-        const saldo = DELIVERY.map(({ id }) => ({
-          piattaforma: id,
-          vendite: Object.values(db.entrate).filter(e => e.canale === id).reduce((s, e) => s + Number(e.importo), 0),
-          ricevuto: acc.filter(a => a.piattaforma === id).reduce((s, a) => s + Number(a.importo), 0),
-        }));
-        const accrediti = acc.slice().sort((a, b) => (b.data + b.created_at).localeCompare(a.data + a.created_at)).slice(0, 20);
-        return wait({ saldo, accrediti });
+      async loadMonth(da, a) {
+        const inMonth = g => g >= da && g <= a;
+        return wait({
+          entrate: Object.values(db.entrate).filter(e => inMonth(e.giorno)),
+          uscite: db.uscite.filter(u => !u.deleted_at && inMonth(u.giorno)),
+        });
       },
-      async addAccredito(a) { db.accrediti.push({ ...a, id: uid(), created_at: new Date().toISOString() }); persist(); return wait(); },
-      async deleteAccredito(id) { const a = db.accrediti.find(x => x.id === id); if (a) a.deleted_at = new Date().toISOString(); persist(); return wait(); },
     };
   }
 
@@ -152,11 +156,11 @@
   // =====================================================================
   const state = {
     giorno: todayISO(),
-    entrate: emptyEntrate(),   // { pranzo: { locale: 0, ... }, cena: {...} }
+    entrate: emptyEntrate(),   // { pranzo: { contanti: 0, pos: 0, ... }, cena: {...} }
     uscite: [],
     storico: [],
     lastUpdate: null,
-    delivery: { saldo: [], accrediti: [] },
+    mese: { entrate: [], uscite: [] },
   };
   function emptyEntrate() {
     return Object.fromEntries(SERVIZI.map(s => [s, Object.fromEntries(CANALI.map(c => [c.id, 0]))]));
@@ -229,13 +233,13 @@
     } else if (cls === "pending") inp.classList.add("is-pending");
   }
 
-  // Dopo un salvataggio aggiorna storico e saldo delivery (senza toccare gli input)
+  // Dopo un salvataggio aggiorna storico e riepilogo mensile (senza toccare gli input)
   let refreshTimer;
   function refreshAfterSave() {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(async () => {
       try {
-        const [day] = await Promise.all([store.loadDay(state.giorno), loadDelivery()]);
+        const [day] = await Promise.all([store.loadDay(state.giorno), loadMonth()]);
         state.storico = day.storico;
         state.lastUpdate = latest(day.entrate);
         renderStorico();
@@ -252,16 +256,22 @@
   function buildChannelInputs() {
     for (const servizio of SERVIZI) {
       const box = $(`[data-channels="${servizio}"]`);
-      box.innerHTML = CANALI.map((c, i) => `
+      box.innerHTML = GRUPPI.map(g => `
+        <div class="group">
+          <div class="group-head"><span>${g.nome}</span><b data-gtotal="${servizio}-${g.id}">0,00 €</b></div>
+          ${CANALI.filter(c => c.gruppo === g.id).map(c => {
+            const i = CANALI.indexOf(c);
+            return `
         <label class="channel" style="--c:${c.color}">
-          <span class="channel-name">${c.nome}<small>${c.sub}</small></span>
+          <span class="channel-name">${c.nome}</span>
           <span class="money">
             <input type="text" inputmode="decimal" autocomplete="off" placeholder="0"
                    enterkeyhint="${i === CANALI.length - 1 ? "done" : "next"}"
                    data-s="${servizio}" data-c="${c.id}" aria-label="${c.nome} ${servizio}" />
             <span>€</span>
           </span>
-        </label>`).join("");
+        </label>`; }).join("")}
+        </div>`).join("");
     }
   }
 
@@ -279,8 +289,11 @@
     const servizio = Object.fromEntries(SERVIZI.map(s => [s, round2(CANALI.reduce((t, c) => t + e[s][c.id], 0))]));
     const canale = Object.fromEntries(CANALI.map(c => [c.id, round2(SERVIZI.reduce((t, s) => t + e[s][c.id], 0))]));
     const entrate = round2(servizio.pranzo + servizio.cena);
+    const gruppo = {};
+    for (const s of SERVIZI) for (const g of GRUPPI)
+      gruppo[`${s}-${g.id}`] = round2(CANALI.filter(c => c.gruppo === g.id).reduce((t, c) => t + e[s][c.id], 0));
     const uscite = round2(state.uscite.reduce((t, u) => t + Number(u.importo), 0));
-    return { servizio, canale, entrate, uscite, risultato: round2(entrate - uscite) };
+    return { servizio, canale, gruppo, entrate, uscite, risultato: round2(entrate - uscite) };
   }
 
   function renderTotals() {
@@ -290,6 +303,9 @@
     $("#sum-cena").textContent = fmt(t.servizio.cena);
     $(`[data-total="pranzo"]`).textContent = fmt(t.servizio.pranzo);
     $(`[data-total="cena"]`).textContent = fmt(t.servizio.cena);
+    for (const [k, v] of Object.entries(t.gruppo)) $(`[data-gtotal="${k}"]`).textContent = fmt(v);
+    $("#sum-contanti").textContent = fmt(t.canale.contanti);
+    $("#sum-pos").textContent = fmt(t.canale.pos);
     $("#tot-uscite").textContent = fmt(t.uscite);
     $("#uscite-total").textContent = fmt(t.uscite);
     $("#tot-risultato").textContent = fmt(t.risultato);
@@ -348,53 +364,73 @@
     $("#day-today").setAttribute("aria-pressed", String(state.giorno === todayISO()));
   }
 
-  function renderDelivery() {
-    const { saldo, accrediti } = state.delivery;
-    const by = Object.fromEntries(saldo.map(r => [r.piattaforma, r]));
-    $("#delivery").innerHTML = DELIVERY.map(c => {
-      const r = by[c.id] || { vendite: 0, ricevuto: 0 };
-      const due = round2(Number(r.vendite) - Number(r.ricevuto));
-      return `
-        <div class="dlv" style="--c:${c.color}">
-          <span class="dlv-name">${c.nome}</span>
-          <span class="dlv-col"><small>Registrate</small>${fmt(r.vendite)}</span>
-          <span class="dlv-col"><small>Ricevute</small>${fmt(r.ricevuto)}</span>
-          <span class="dlv-col dlv-col--due"><small>Da ricevere</small>${fmt(due)}</span>
-        </div>`;
-    }).join("");
+  function renderMonth() {
+    const { entrate, uscite } = state.mese;
+    const [da] = monthRange(state.giorno);
+    const giorni = {};
+    const day = g => (giorni[g] ||= { entrate: 0, uscite: 0 });
+    const perCanale = Object.fromEntries(CANALI.map(c => [c.id, 0]));
+    for (const r of entrate) {
+      const c = normCanale(r.canale), v = Number(r.importo) || 0;
+      if (c in perCanale) perCanale[c] += v;
+      day(r.giorno).entrate += v;
+    }
+    for (const u of uscite) day(u.giorno).uscite += Number(u.importo) || 0;
 
-    const ul = $("#accrediti-list");
-    ul.innerHTML = accrediti.length
-      ? accrediti.map(a => `
-        <li>
-          <span>${dateShort(a.data)} · <b>${NOME[a.piattaforma]}</b> · ${a.destinazione === "cassaforte" ? "Cassaforte" : "Banca"}${a.note ? " · " + esc(a.note) : ""}</span>
-          <span><span class="li-amount">${fmt(a.importo)}</span>
-            <button class="li-del" data-del-accredito="${esc(a.id)}" aria-label="Elimina accredito">✕</button></span>
-        </li>`).join("")
-      : `<li class="empty">Nessun accredito registrato</li>`;
+    const totE = round2(Object.values(perCanale).reduce((a, b) => a + b, 0));
+    const totU = round2(uscite.reduce((a, u) => a + (Number(u.importo) || 0), 0));
+    const ris = round2(totE - totU);
+    const sign = ris > 0 ? "pos" : ris < 0 ? "neg" : "";
+
+    $("#mese-titolo").textContent = monthName(da);
+    $("#mese-entrate").textContent = fmt(totE);
+    $("#mese-uscite").textContent = fmt(totU);
+    $("#mese-risultato").textContent = fmt(ris);
+    const badge = $("#mese-badge");
+    badge.dataset.sign = sign;
+    badge.textContent = sign === "pos" ? "▲ In positivo" : sign === "neg" ? "▼ In negativo" : "In pareggio";
+    $("#mese-canali").innerHTML = CANALI.map(c =>
+      `<span class="mc" style="--c:${c.color}"><i></i>${c.nome}<b>${fmt(perCanale[c.id])}</b></span>`).join("");
+
+    const righe = Object.entries(giorni).sort((a, b) => b[0].localeCompare(a[0]));
+    $("#mese-count").textContent = righe.length ? `${righe.length} giorni` : "";
+    $("#mese-giorni").innerHTML = righe.length ? righe.map(([g, v]) => {
+      const r = round2(v.entrate - v.uscite);
+      return `<li data-go="${g}" class="${g === state.giorno ? "is-current" : ""}">
+        <span class="li-title">${fromISO(g).toLocaleDateString("it-IT", { weekday: "short", day: "numeric" })}</span>
+        <span class="li-sub">+${fmt(v.entrate)} · −${fmt(v.uscite)}</span>
+        <span class="li-amount ${r < 0 ? "neg" : "pos"}">${fmt(r)}</span>
+      </li>`;
+    }).join("") : `<li class="empty">Nessun dato in questo mese</li>`;
   }
 
   // =====================================================================
   //  CARICAMENTO
   // =====================================================================
   let loadSeq = 0;
+  let meseCaricato = null;
   async function loadDay({ soft = false } = {}) {
     const seq = ++loadSeq;
     const giorno = state.giorno;
+    if (giorno.slice(0, 7) !== meseCaricato) { meseCaricato = giorno.slice(0, 7); loadMonth(); }
+    else if (soft) loadMonth();
     renderDay();
     if (!soft) { state.entrate = emptyEntrate(); applyPendingToState(); fillInputs(); renderTotals(); }
     try {
       const day = await store.loadDay(giorno);
       if (seq !== loadSeq) return;            // l'utente ha cambiato giorno nel frattempo
       const e = emptyEntrate();
-      for (const r of day.entrate) if (e[r.servizio] && r.canale in e[r.servizio]) e[r.servizio][r.canale] = Number(r.importo);
+      for (const r of day.entrate) {
+        const c = normCanale(r.canale);
+        if (e[r.servizio] && c in e[r.servizio]) e[r.servizio][c] += Number(r.importo);
+      }
       state.entrate = e;
       applyPendingToState();
       state.uscite = day.uscite;
       state.storico = day.storico;
       state.lastUpdate = latest(day.entrate);
       fillInputs({ onlyIdle: soft });
-      renderTotals(); renderUscite(); renderStorico(); renderLastUpdate();
+      renderTotals(); renderUscite(); renderStorico(); renderLastUpdate(); renderMonth();
     } catch (err) {
       console.error(err);
       if (isAuthError(err)) return handleAuthLost();
@@ -410,10 +446,15 @@
     }
   }
 
-  async function loadDelivery() {
+  let monthSeq = 0;
+  async function loadMonth() {
+    const seq = ++monthSeq;
     try {
-      state.delivery = await store.loadDelivery();
-      renderDelivery();
+      const [da, a] = monthRange(state.giorno);
+      const mese = await store.loadMonth(da, a);
+      if (seq !== monthSeq) return;
+      state.mese = mese;
+      renderMonth();
     } catch (err) { console.error(err); }
   }
 
@@ -483,36 +524,17 @@
       catch (err) { console.error(err); toast("Errore durante l'eliminazione"); }
     };
 
-    // Accrediti delivery
-    $("#a-data").value = todayISO();
-    $("#accredito-form").onsubmit = async e => {
-      e.preventDefault();
-      const importo = parseEuro($("#a-importo").value);
-      if (!(importo > 0)) return toast("Inserisci un importo valido");
-      const btn = e.submitter; if (btn) btn.disabled = true;
-      try {
-        await store.addAccredito({
-          data: $("#a-data").value || todayISO(), piattaforma: $("#a-piatt").value, importo,
-          destinazione: $("#a-dest").value, note: $("#a-note").value.trim() || null,
-        });
-        $("#a-importo").value = ""; $("#a-note").value = "";
-        toast("Accredito registrato");
-        await loadDelivery();
-      } catch (err) { console.error(err); toast("Errore nel salvataggio dell'accredito"); }
-      finally { if (btn) btn.disabled = false; }
-    };
-    $("#accrediti-list").onclick = async e => {
-      const id = e.target.closest("[data-del-accredito]")?.dataset.delAccredito;
-      if (!id || !confirm("Eliminare questo accredito?")) return;
-      try { await store.deleteAccredito(id); toast("Accredito eliminato"); await loadDelivery(); }
-      catch (err) { console.error(err); toast("Errore durante l'eliminazione"); }
+    // Riepilogo mese: tocca un giorno per aprirlo
+    $("#mese-giorni").onclick = e => {
+      const g = e.target.closest("[data-go]")?.dataset.go;
+      if (g) { goTo(g); window.scrollTo({ top: 0, behavior: "smooth" }); }
     };
 
     // Rete e sincronizzazione tra dispositivi
     window.addEventListener("online", () => { setSync(); flush(); });
     window.addEventListener("offline", () => setSync());
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") { flush(); loadDay({ soft: true }); loadDelivery(); }
+      if (document.visibilityState === "visible") { flush(); loadDay({ soft: true }); }
     });
     setInterval(() => { if (Object.keys(pending).length) flush(); }, 15000);
     setInterval(() => { if (document.visibilityState === "visible" && !Object.keys(pending).length) loadDay({ soft: true }); }, 60000);
@@ -542,7 +564,6 @@
     if (!started) { buildChannelInputs(); bindEvents(); started = true; }
     setSync();
     loadDay();
-    loadDelivery();
     flush();
   }
 
